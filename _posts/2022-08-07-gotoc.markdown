@@ -1,0 +1,74 @@
+---
+layout: post
+title:  "Go-To-C!"
+date:   2022-08-07 11:58:45 +0530
+categories: cgo
+---
+`CGO` is one of the powerful features that golang provides, which helps us to embed `C` applications with `GO`.
+
+This becomes possible with the help of pseudo-package `C`. `C` is actually a [foreign function interface](https://en.wikipedia.org/wiki/Foreign_function_interface) that assists the C function calls from Go.
+
+It would be much easier to understand this with an example, so let's just dive right into it.
+<figure>
+  <figcaption>File: ~/cgo/main.go</figcaption>
+{% highlight go linenos %}
+package main
+
+// #include "area.c"
+import "C"
+import (
+	"errors"
+	"fmt"
+	"log"
+)
+
+func Area(x, y int) (int, error) {
+	width := C.int(x)
+	height := C.int(y)
+
+	area, err := C.Area(width, height)
+	if err != nil {
+		return 0, errors.New("error calling Area Function: " + err.Error())
+	}
+
+	result := int(area)
+
+	return result, nil
+}
+
+func main() {
+	area, err := Area(25, 20)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Area is %d\n", area)
+}
+//=> prints 'Area is 500'.
+{% endhighlight %}
+</figure>
+
+The above main.go file contains a lot of information, so let's break it down. Line No. 4 is where we import the `C` FFI so that we can call our C code. This line is preceded by `#include "area.c"`, this statement is called a `preamble`. This preamble is used as a header while compiling `C` parts of the program. The code inside `area.c` looks as follows:
+
+<figure>
+  <figcaption>File: ~/cgo/area.c</figcaption>
+{% highlight c linenos %}
+#include<stdio.h>
+
+int Area(int x, int y){
+    return x*y;
+}
+{% endhighlight %}
+</figure>
+
+Getting back to our main.go file, line no. 40 invokes the function `Area` that takes two go integers. The first step in this function i.e on line 26-27 is to type cast the go integers to C ints. Different data types in golang needs to be type casted to its [corresponding data type](https://gist.github.com/zchee/b9c99695463d8902cd33#c-types-in-go) in C. After that we call the `C.Area` function that is defined in our `area.c` file. The actual function only returns the product of two values but in Go we have two return values `area and err`. The err is not nil if we have some errors in our C code. This provides us a better way to handle errors from the golang side. 
+
+After we get the result all we need to do is convert the data type of the result to corresponding Go data type(line no. 34). 
+
+Finally we can go ahead and build the code using `go build`, which gives us the following output:
+`Area is 500`
+
+That's it, we are able to successfully call our C code from Golang side.
+
+References:
+[cgo-docs](https://pkg.go.dev/cmd/cgo)
