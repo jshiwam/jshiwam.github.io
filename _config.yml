@@ -21,9 +21,9 @@
 title: jshiwam
 email: jaiswalshiwam369@gmail.com
 description: >- # this means to ignore newlines until "baseurl:"
-    Blog.
+    Blog
 domain: jshiwam.github.io
-baseurl: /jshiwam.github.io # the subpath of your site, e.g. /blog
+baseurl:  # the subpath of your site, e.g. /blog
 url: https://jshiwam.github.io # the base hostname & protocol for your site, e.g. http://example.com
 # twitter_username: jekyllrb
 github_username:  jshiwam
