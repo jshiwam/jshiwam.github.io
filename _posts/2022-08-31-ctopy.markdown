@@ -1,0 +1,167 @@
+---
+layout: post
+title:  "C-To-Python!"
+date:   2022-08-31 11:58:45 +0530
+categories: cpython
+---
+
+`CPython` is one of the many python runtimes. It contains both a [runtime](https://www.techtarget.com/searchsoftwarequality/definition/runtime) and a shared language specification that all the python runtimes use. Python's official implementation is in C, which is referred as CPython.
+
+This means that we can make use of the Python features in `C` and vice-versa using the `CPython` API . The scope of this blog will be limited to calling python functions from `C`. For detailed information please refer the [docs](https://docs.python.org/3/extending/index.html)
+
+Let's start with a python function that we want to call from `C`. We have the following `area` function defined in `Rectangle.py` which calculates the area of a rectangle. 
+<figure>
+  <figcaption>File: ~/cpython/Rectangle.py</figcaption>
+{% highlight python linenos %}
+def area(a, b):
+    return a*b
+{% endhighlight %}
+</figure>
+
+Now our goal is to execute this python function from C by making use of the `CPython` API. First I will add the `C` code which calls the python function below and then I will explain each and every line of the code to make it clear to the reader. The code itself is documented as well.
+
+<figure>
+  <figcaption>File: ~/cpython/ctopy.c</figcaption>
+{% highlight c linenos %}
+#include<Python.h>
+
+double call_func(PyObject *func, double x, double y)
+{
+    PyObject *args;
+    PyObject *kwargs;
+    PyObject *result = 0;
+    double retval;
+      
+    //https://docs.python.org/3/c-api/call.html#call-support-api
+    // Verify that func is a callable
+    if (!PyCallable_Check(func))
+    {
+        fprintf(stderr, "call_func: expected a callable\n");
+        goto fail;
+    }
+    
+	// https://docs.python.org/3/c-api/arg.html#building-values
+	// Build args tuple which will be passed to python func
+	args = Py_BuildValue("(dd)", x, y);
+	kwargs = NULL;
+	
+	// https://docs.python.org/3/c-api/call.html#c.PyObject_Call
+	// Call the python function
+	result = PyObject_Call(func, args, kwargs);
+
+	// https://docs.python.org/3/c-api/refcounting.html#c.Py_DecRef
+	// Decrease the referece since Py_BuildValue returns a new ref.
+	Py_DECREF(args);
+
+	// https://docs.python.org/3/c-api/refcounting.html#c.Py_XDECREF
+	// Decrease the reference using XDECREF because kwargs is NULL
+	Py_XDECREF(kwargs);
+	
+	// https://docs.python.org/3/c-api/exceptions.html#c.PyErr_Occurred
+	// Check if python function was executed without any error.
+	if (PyErr_Occurred())
+	{
+		PyErr_Print();
+		goto fail;
+	}
+	
+	// https://docs.python.org/3/c-api/float.html#c.PyFloat_Check
+	// Verify the result is a float object
+	if (!PyFloat_Check(result))
+	{
+		fprintf(stderr, "call_func: callable didn't return a float\n");
+		goto fail;
+	}
+	
+	// https://docs.python.org/3/c-api/float.html#c.PyFloat_AsDouble
+	// Convert PyFloat to C double
+	retval = PyFloat_AsDouble(result);
+	Py_DECREF(result);
+	
+	return retval;
+	fail:
+		Py_XDECREF(result);
+		abort();
+}
+
+
+/* Load a symbol from a module */
+PyObject *import_function(const char *modname, const char *symbol)
+{
+	PyObject *u_name, *module;
+
+	// https://docs.python.org/3/c-api/unicode.html#c.PyUnicode_FromString
+	// Convert Unicode Object from UTF-8 encoded char buffer.
+	u_name = PyUnicode_FromString(modname);
+	if(u_name == NULL){
+		printf("Couldnot convert string to unicode\n");
+		return NULL;
+	}
+
+	// https://docs.python.org/3/c-api/import.html#c.PyImport_Import
+	// Import the module, PyImport_Import performs absolute import
+	module = PyImport_Import(u_name);
+	
+	
+	if(module == NULL){
+		printf("Couldnot Import Module\n");
+		return NULL;
+	}
+		
+	// https://docs.python.org/3/c-api/object.html#c.PyObject_GetAttrString
+	// Get the function from module 
+	// This is the equivalent of the Python expression o.attr_name.
+	return PyObject_GetAttrString(module, symbol);
+}
+
+
+int main()
+{
+	PyObject *area_func;
+	double x,y;
+
+	// https://docs.python.org/3/c-api/init.html#c.Py_Initialize
+	// Initialize the Python interpreter and
+	// since version 3.7 it also create the GIL explicitly by calling PyEval_InitThreads()
+	// so you don’t have to call PyEval_InitThreads() yourself anymore
+	Py_Initialize();
+	
+	// Get a reference to the Area.area function
+	area_func = import_function("Rectangle", "area");
+	
+	if(area_func == NULL){
+		return -1;
+	}
+	// Call it using our call_func() code
+	for (x = 0.0,y=10.0; x <= 10.0 && y>=0 ; x += 0.5, y-=0.5)
+	{
+		printf("x : % 0.2f y : % 0.2f Area : % 0.2f\n", x, y, call_func(area_func, x, y));
+	}
+		
+	Py_DECREF(area_func);
+
+	// Undo all initializations made by Py_Initialize() and subsequent
+	Py_Finalize();
+	return 0;
+}
+{% endhighlight %}
+</figure>
+
+On line `1` we include the Python.h header which is the entry point of Python C API.
+
+On line `102` inside the `main` function we Initialize the python interpreter. Since we are executing the python code from `C` we need to initialize the interpreter where we can execute the python byte code. This line will Initialize the python Interpreter and will create the GIL explicitly by calling `PyEval_InitThreads` and lock it.
+Any python operation that we perform on the interpreter should be done only when the GIL is locked. Python interpreter is not fully thread safe hence we need to take care of GIL here as we are performing python operations from C. More information about the GIL can be found [here](https://realpython.com/python-gil/). 
+
+The convention that we follow while performing a python operation is as follows:
+ - Lock the GIL
+ - Do Python
+ - Unlock the GIL
+
+ In the code above the GIL is locked when we initialize the interpreter, so we don't lock it explicitly anywhere in the whole program because the above program is single threaded. 
+
+ On line no. `105` we import the `area` function from `Rectangle.py`
+
+
+
+References:
+[cgo-docs](https://pkg.go.dev/cmd/cgo)
