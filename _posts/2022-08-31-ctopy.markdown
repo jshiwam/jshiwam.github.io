@@ -18,7 +18,7 @@ def area(a, b):
 {% endhighlight %}
 </figure>
 
-Now our goal is to execute this python function from C by making use of the `CPython` API. First I will add the `C` code which calls the python function below and then I will explain each and every line of the code to make it clear to the reader. The code itself is documented as well.
+Now our goal is to execute this python function from C by making use of the `CPython` API. First I will add the `C` code below, which calls the python function  and then I will explain each and every line of the code to make it clear to the reader. The code itself is documented as well.
 
 <figure>
   <figcaption>File: ~/cpython/ctopy.c</figcaption>
@@ -159,9 +159,69 @@ The convention that we follow while performing a python operation is as follows:
 
  In the code above the GIL is locked when we initialize the interpreter, so we don't lock it explicitly anywhere in the whole program because the above program is single threaded. 
 
- On line no. `105` we import the `area` function from `Rectangle.py`
+ On line no. `105` we import the `area` function from `Rectangle.py`. Inside the `import_function` on line no `64` takes `module name` and `function name` as arguments. It converts `module name` to `PyObject` using `PyUnicode_FromString` on line `70` which is passed as an argument to `PyImport_Import` on line 78. After we import the module we get the required function on line no 89 using `PyObject_GetAttrString`, this function is an equivalent of Python expression `o.attr_name`, where `o` is the object and `attr_name` is the attribute that we want to get.
+
+After we import the `area` function its time to call the function from `C`. On line no `111-114` we have a for loop that has two variables x and y which we pass as an argument to `call_func`, we also pass the `area_func` which is our `area` function in `Rectangle.py` as an argument to `call_func`.
+
+`call_func` is defined on line no. `3`. In this function we first check whether the `func` that we have passed is callable or not. `PyObject_Call` on line `25` calls the python function with `args` and `kwargs`, in order to make this function call first we prepare these arguments. On line `20` we build a tuple with `x` and `y` which are our positional arguments which we pass as `args`, `kwargs` is `NULL` because we don't have any keyword arguments in our `area` function. This is where we call our `area` function and get its output.
+
+Before we further go thorugh the code, We need to know about Python's Memory management which you can read [here](https://docs.python.org/3/c-api/memory.html). This is a pre-requisite that needs to be understood before we go through the other section of `call_func`.
 
 
+`Py_BuildValue` on line no 20 returns a new reference to a PyObject, everytime a new reference to a PyObject is created in memory, it's the responsibility of the programmer to decrease its reference count. If the object's reference count is not decreased then the Python Garbage Collector won't remove that object from the memory and we will end up having a memory leak. 
+
+After the `args` is used we decrease it's reference count on line no 29 using `Py_DECREF`. We use `Py_XDECREF` to decrease the reference count of `kwargs`. In this case `kwargs` is `NULL` and we need not decrease any refernce count here, but using `Py_XDECREF` we demonstrate that it is possible to decrease the reference of those objects whose value is `NULL`. Whenever we are not sure of the value of the PyObject, we should use `Py_XDECREF`. More information of these functions can be found [here](https://stackoverflow.com/a/41915356)
+
+On line `37` we make sure that `PyObject_Call` ran successfully without any errors, if there is any runtime error on python side, then we catch it and print it on line `39` using `PyErr_Print`.
+
+On line `45` we check the result's type and make sure that it is a float object. On line `53` we convert the PyFloat object to C double using `PyFloat_AsDouble` and then we decrease the reference count of the result and we return the `retval` on line `56`.
+
+After completion of the loop on line `111-114` we decrease the reference count of `area_func` and the call `Py_Finalize`, this will undo all the initializations made by Py_Initialize.
+
+
+# How to run the above code
+
+Create the two files add the respective C and Python code and save them in the same dir. In my case both the files are in `cpython` dir. Then follow the given commands to execute the code successfully.
+
+```
+cd cpython
+export PYTHONPATH=.
+cc -g ctopy.c -I/usr/include/python3.10 -L /usr/lib/python3.10/config-3.10-x86_64-linux-gnu -lpython3.10
+```
+
+The path to python interpreter might be different in your system, you would have to change that according to your requirements.
+
+# Output
+
+```
+./a.out
+x :  0.00 y :  10.00 Area :  0.00
+x :  0.50 y :  9.50 Area :  4.75
+x :  1.00 y :  9.00 Area :  9.00
+x :  1.50 y :  8.50 Area :  12.75
+x :  2.00 y :  8.00 Area :  16.00
+x :  2.50 y :  7.50 Area :  18.75
+x :  3.00 y :  7.00 Area :  21.00
+x :  3.50 y :  6.50 Area :  22.75
+x :  4.00 y :  6.00 Area :  24.00
+x :  4.50 y :  5.50 Area :  24.75
+x :  5.00 y :  5.00 Area :  25.00
+x :  5.50 y :  4.50 Area :  24.75
+x :  6.00 y :  4.00 Area :  24.00
+x :  6.50 y :  3.50 Area :  22.75
+x :  7.00 y :  3.00 Area :  21.00
+x :  7.50 y :  2.50 Area :  18.75
+x :  8.00 y :  2.00 Area :  16.00
+x :  8.50 y :  1.50 Area :  12.75
+x :  9.00 y :  1.00 Area :  9.00
+x :  9.50 y :  0.50 Area :  4.75
+x :  10.00 y :  0.00 Area :  0.00
+```
 
 References:
-[cgo-docs](https://pkg.go.dev/cmd/cgo)
+
+[cpython-docs](https://docs.python.org/3/extending/extending.html)
+
+[GIL](https://realpython.com/python-gil/)
+
+[Call Python from C](https://www.geeksforgeeks.org/calling-python-from-c-set-1/)
