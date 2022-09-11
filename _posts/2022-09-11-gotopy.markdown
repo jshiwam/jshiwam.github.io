@@ -1,0 +1,271 @@
+---
+layout: post
+title:  "Call Python function From Go!"
+date:   2022-09-11 11:58:45 +0530
+categories: go-c-python
+---
+
+In the last two posts we learnt how to call [C code from Golang](https://jshiwam.github.io/go-c-python/2022/08/07/gotoc.html) and how to call [Python Code from C](https://jshiwam.github.io/go-c-python/2022/08/31/ctopy.html), respectively. This post will bring both of them together, here we are trying to call python bytecode from Golang. The following figure explains it well. 
+
+
+![Calling Python ByteCode from Golang](/assets/go-c-python.png)
+
+
+The first part of the code is in golang as follows:
+
+<figure>
+  <figcaption>File: ~/go-py/main.go</figcaption>
+{% highlight go linenos %}
+package main
+
+/*
+#cgo pkg-config: python3
+#cgo LDFLAGS: -lpython3.8
+
+#include "glue.c"
+*/
+import "C"
+import (
+	"fmt"
+	"log"
+	"unsafe"
+)
+
+func Py_Initialize() {
+	C.initialize()
+}
+func Py_Finalize() {
+	C.finalize()
+}
+func pyError() error {
+	pyerr := C.py_error()
+
+	if pyerr == nil {
+		return nil
+	}
+
+	err := C.GoString(pyerr)
+
+	return fmt.Errorf("%s", err)
+}
+
+func close(fn *C.PyObject) {
+	if fn == nil {
+		return
+	}
+	C.py_decref(fn)
+	fn = nil
+}
+
+func main() {
+	Py_Initialize()
+	defer Py_Finalize()
+	fn, err := importPyFunc("Rectangle", "area")
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	x := 7.89
+	y := 12.24
+	area, err := callPyFunc(fn, x, y)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	fmt.Printf("Area is %f\n", area)
+}
+
+func importPyFunc(moduleName, symbol string) (*C.PyObject, error) {
+	cMod := C.CString(moduleName)
+	cFunc := C.CString(symbol)
+
+	defer func() {
+		C.free(unsafe.Pointer(cMod))
+		C.free(unsafe.Pointer(cFunc))
+	}()
+
+	fn := C.import_function(cMod, cFunc)
+	if fn.err == 1 {
+		return nil, pyError()
+	}
+
+	return fn.object, nil
+}
+
+func callPyFunc(fun *C.PyObject, x float64, y float64) (float64, error) {
+	width := C.double(x)
+	height := C.double(y)
+
+	area := C.call_func(fun, width, height)
+
+	close(fun)
+
+	if area.err == 1 {
+		return -1, pyError()
+	}
+	result := float64(area.val)
+	return result, nil
+}
+
+{% endhighlight %}
+</figure>
+
+The above code is go equivalent of the following python code:
+
+```
+import Rectangle
+Rectangle.area(x,y)
+```
+
+[This post](https://jshiwam.github.io/go-c-python/2022/08/07/gotoc.html) has a detailed explaination on how to read/write cgo code.
+
+All the C functions used in main.go are defined in the following `glue.c` file.
+
+
+<figure>
+  <figcaption>File: ~/go-py/glue.c</figcaption>
+{% highlight c linenos %}
+#include<Python.h>
+
+typedef struct{
+    PyObject *object;
+    double val;
+    // TODO : Pass Custom error message from C to GO.
+    int err;
+} PyRes;
+
+void initialize(){
+    Py_Initialize();
+}
+
+void finalize(){
+    Py_Finalize();
+}
+
+void py_decref(PyObject *obj){
+    Py_DECREF(obj);
+}
+
+const char *py_error(){
+    PyObject *err = PyErr_Occurred();
+    if (err == NULL){
+        return NULL;
+    }
+
+    PyObject *str = PyObject_Str(err);
+    const char *utf8 = PyUnicode_AsUTF8(str);
+    Py_DECREF(str);
+    return utf8;
+}
+
+PyRes call_func(PyObject *func, double x, double y){
+    PyObject *args;
+    PyObject *kwargs;
+    PyObject *result = 0;
+    PyRes retval = {NULL,-1,0};
+
+    if(!PyCallable_Check(func)){
+        printf("call_func: func is not a callable PyObject \n");
+        retval.err = 1;
+        goto fail;
+    }
+
+    args = Py_BuildValue("(dd)",x,y);
+    kwargs = NULL;
+
+    result = PyObject_Call(func, args, kwargs);
+
+    Py_DECREF(args);
+    Py_XDECREF(kwargs);
+
+    if(PyErr_Occurred()){
+        retval.err = 1;
+        goto fail;
+    }
+
+    if (!PyFloat_Check(result)){
+        printf("call_func: callable didn't return a float\n");
+        retval.err = 1;
+        goto fail;
+    }
+
+    retval.val = PyFloat_AsDouble(result);
+    Py_DECREF(result);
+
+    if(PyErr_Occurred()){
+        retval.err = 1;
+        goto fail;
+    }
+
+    return retval;
+    fail:
+        Py_XDECREF(result);
+        return retval;
+}
+
+
+PyRes import_function(const char *modname, const char *symbol){
+    PyObject *u_name, *module;
+    PyRes res = {NULL,-1,0};
+    char buffer[1024];
+    u_name = PyUnicode_FromString(modname);
+    if(u_name == NULL){
+        printf("import_function: Couldnot convert string \"%s\" to unicode ", modname);
+        res.err = 1;
+        return res;
+    }
+
+    module = PyImport_Import(u_name);
+    Py_DECREF(u_name);
+
+    if(module == NULL){
+        
+        printf("import_function: Couldnot import module %s ",modname);
+        res.err = 1;
+        return res;
+    }
+    
+    res.object = PyObject_GetAttrString(module,symbol);
+    if(res.object == NULL){
+        printf("import_function: Couldnot Get the %s attribute from %s module",symbol,modname);
+        res.err = 1;
+        return res;
+    }
+    Py_DECREF(module);
+    return res;
+}
+{% endhighlight %}
+</figure>
+
+The `glue.c` file's main purpose is to expose the CPYTHON API on Golang side. Some of the functions such as `initialize`, `py_decref`, `finalize` etc. are invoked from Golang side, but the main use of these functions is to make use of Cpython API.
+
+The other functions such as `import_function` and `call_func` are used to import the python function `Rectangle.area` and call it respectively.
+
+[This post](https://jshiwam.github.io/go-c-python/2022/08/31/ctopy.html) has a detailed explaination on how to read/write cpython code.
+
+Finally we have our python function as follows:
+
+<figure>
+  <figcaption>File: ~/go-py/Rectangle.py</figcaption>
+{% highlight python linenos %}
+def area(x: float, y: float)->float:
+    """
+    @param x : width of rectangle
+    @param y : height of rectangle
+    @retval  : area of rectangle
+    Calculates Area of a Triangle
+    """
+    return x * y
+
+{% endhighlight %}
+</figure>
+
+Here is a github repository for this project. It has a readme file which explains how to run this on your local system. 
+
+[Fork Me On Github](https://github.com/jshiwam/go-py)
+
+References :
+
+[Using Python in memory](https://www.ardanlabs.com/blog/2020/09/using-python-memory.html)
+
+[Embedding Python in Go](https://poweruser.blog/embedding-python-in-go-338c0399f3d5)

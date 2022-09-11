@@ -1,8 +1,8 @@
 ---
 layout: post
-title:  "C-To-Python!"
+title:  "Call Python function From C!"
 date:   2022-08-31 11:58:45 +0530
-categories: cpython
+categories: go-c-python
 ---
 
 `CPython` is one of the many python runtimes. It contains both a [runtime](https://www.techtarget.com/searchsoftwarequality/definition/runtime) and a shared language specification that all the python runtimes use. Python's official implementation is in C, which is referred as CPython.
