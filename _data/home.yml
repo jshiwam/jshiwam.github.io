@@ -1,0 +1,55 @@
+navbar_entries:
+  - title: about
+    url: about
+
+  - title: blog
+    url: blog
+
+  - title: website
+    url: https://jshiwam.github.io
+
+project_entries:
+  - title: cpy3x
+    url: https://github.com/jshiwam/cpy3x
+    desc: A library that helps embed python applications from golang
+    highlight: WIP
+
+  - title: RecBloc
+    url: https://chrome.google.com/webstore/detail/recbloc/cdkfhncngnpappmbocjbiojbpidhlnej
+    desc: Youtube suggesstions blocker, helps me to focus while using youtube for eductaional purposes.
+
+  - title: nand2tetris
+    url: https://github.com/jshiwam/nand2tetris
+    desc: A computer built using nand gates, it includes a custom assembler and a VM translator
+
+  - title: MicroServices in Golang
+    url: https://github.com/jshiwam/building-microservices-in-go
+    desc: A microservice based architechture that connects different services that perform currency conversion, image compression etc.
+
+# old_project_entries:
+#   - title: Soopr
+#     url: https://www.soopr.co
+#     desc: Delight your readers - add beautiful share and like buttons easily to your websites 
+#     highlight: NEW
+
+#   - title: Cookie
+#     url: https://github.com/abhinavs/cookie
+#     desc: An open source landing website with supporting pages and integrated blog
+
+#   - title: Moonwalk
+#     url: https://github.com/abhinavs/moonwalk
+#     desc: A fast and minimalist Jekyll blog theme with clean dark mode
+
+#   - title: Humangous
+#     url: https://www.humangous.co
+#     desc: The better people know you, the better they collaborate
+
+footer_entries:
+  - title: shiwam's homepage
+    url: https://jshiwam.github.io
+
+  - title: github
+    url: https://github.com/jshiwam
+
+  - title: feed
+    url: feed.xml
