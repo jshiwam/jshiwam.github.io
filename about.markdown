@@ -12,7 +12,7 @@ Currently I am working on my own open source project, that is a successor of [cp
 
 I was a software engineer at [BLACKROCK](https://www.blackrock.com/corporate/about-us) where I helped build a scalable QC Platform in Golang/CGO and Python/CPython.
 
-[Checkout my resume](/assets/Shiwam_CV.pdf)
+## [Resume](/assets/Shiwam_CV.pdf)
 
 
 <!-- You can find the source code for Minima at GitHub:

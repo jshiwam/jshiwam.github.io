@@ -14,6 +14,10 @@ project_entries:
     desc: A library that helps embed python applications from golang
     highlight: WIP
 
+  - title: CoffeShop
+    url: https://github.com/jshiwam/building-microservices-in-go
+    desc: A coffeshop API using microservice architecture. Clients interacts with server through rest APIs while the services interact with each other using RPC.
+
   - title: RecBloc
     url: https://chrome.google.com/webstore/detail/recbloc/cdkfhncngnpappmbocjbiojbpidhlnej
     desc: Youtube suggesstions blocker, helps me to focus while using youtube for eductaional purposes.
@@ -21,10 +25,6 @@ project_entries:
   - title: nand2tetris
     url: https://github.com/jshiwam/nand2tetris
     desc: A computer built using nand gates, it includes a custom assembler and a VM translator
-
-  - title: MicroServices in Golang
-    url: https://github.com/jshiwam/building-microservices-in-go
-    desc: A microservice based architechture that connects different services that perform currency conversion, image compression etc.
 
 # old_project_entries:
 #   - title: Soopr
